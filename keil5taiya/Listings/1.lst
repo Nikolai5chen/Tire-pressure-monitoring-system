@@ -1,0 +1,169 @@
+C51 COMPILER V9.60.0.0   1                                                                 06/25/2025 12:29:54 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE 1
+OBJECT MODULE PLACED IN .\Objects\1.obj
+COMPILER INVOKED BY: E:\keil5\C51\BIN\C51.EXE 1.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\1.lst) OB
+                    -JECT(.\Objects\1.obj)
+
+line level    source
+
+   1          #include <reg51.h>
+   2          #include <intrins.h>
+   3          //ADC0832 引脚
+   4          sbit ADCS = P2 ^ 0;  //AD的片选 
+   5          sbit ADDI = P3 ^ 7;
+   6          sbit ADDO = P3 ^ 7;
+   7          sbit ADCLK = P3 ^ 6;  //AD的CLK 
+   8          
+   9          unsigned char dispbitcode[8] = { 0xF7,0xFB,0xFD,0xFE,0xEF,0xDF,0xBF,0x7F }; //位扫描
+  10          unsigned char dispcode[11] = { 0xC0,0xF9,0xA4,0xbB0,0x99,0x92,0x82,0xF8,0x80,0x90,0xFF };  //最后一个�
+             -��全亮，防止出现一些问题 
+  11          //段选码 共阳极
+  12          unsigned char dispbuf[4];
+  13          unsigned int temp;
+  14          unsigned char getdata;
+  15          
+  16          void delay_1ms(void)
+  17          {
+  18   1              unsigned char x, y;
+  19   1              x = 3;
+  20   1              while (x--)
+  21   1              {
+  22   2                      y = 40;
+  23   2                      while (y--);
+  24   2              }
+  25   1      }
+  26          void display(void)
+  27          {
+  28   1              char k;
+  29   1              for (k = 0; k < 4; k++)
+  30   1              {
+  31   2                      P1 = ~dispbitcode[k];
+  32   2                      P0 = ~dispcode[dispbuf[k]];
+  33   2                      if (k == 1)
+  34   2                              P0 = P0 + 0x80;
+  35   2                      delay_1ms();
+  36   2              }
+  37   1      }
+  38          
+  39          unsigned int ADC0832(unsigned char channel)  //AD转换，返回结果
+  40          {
+  41   1              unsigned char i = 0;
+  42   1              unsigned char j;
+  43   1              unsigned int dat = 0;
+  44   1              unsigned char ndat = 0;
+  45   1      
+  46   1              if (channel == 0) channel = 2;
+  47   1              if (channel == 1) channel = 3;
+  48   1              ADDI = 1;
+  49   1              _nop_();
+  50   1              _nop_();
+  51   1              ADCS = 0;
+  52   1              _nop_();
+  53   1              _nop_();
+C51 COMPILER V9.60.0.0   1                                                                 06/25/2025 12:29:54 PAGE 2   
+
+  54   1              ADCLK = 1;
+  55   1              _nop_();
+  56   1              _nop_();
+  57   1              ADCLK = 0;
+  58   1              _nop_();
+  59   1              _nop_();
+  60   1              ADCLK = 1;
+  61   1              ADDI = channel & 0x1;
+  62   1              _nop_();
+  63   1              _nop_();
+  64   1              ADCLK = 0;
+  65   1              _nop_();
+  66   1              _nop_();
+  67   1              ADCLK = 1;
+  68   1              ADDI = (channel >> 1) & 0x1;
+  69   1              _nop_();
+  70   1              _nop_();
+  71   1              ADCLK = 0;
+  72   1              ADDI = 1;
+  73   1              _nop_();
+  74   1              _nop_();
+  75   1              dat = 0;
+  76   1              for (i = 0; i < 8; i++)
+  77   1              {
+  78   2                      dat |= ADDO;
+  79   2                      ADCLK = 1;
+  80   2                      _nop_();
+  81   2                      _nop_();
+  82   2                      ADCLK = 0;
+  83   2                      _nop_();
+  84   2                      _nop_();
+  85   2                      dat <<= 1;
+  86   2                      if (i == 7) dat |= ADDO;
+  87   2              }
+  88   1              for (i = 0; i < 8; i++)
+  89   1              {
+  90   2                      j = 0;
+  91   2                      j = j | ADDO;
+  92   2                      ADCLK = 1;
+  93   2                      _nop_();
+  94   2                      _nop_();
+  95   2                      ADCLK = 0;
+  96   2                      _nop_();
+  97   2                      _nop_();
+  98   2                      j = j << 7;
+  99   2                      ndat = ndat | j;
+ 100   2                      if (i < 7) ndat >>= 1;
+ 101   2              }
+ 102   1              ADCS = 1;
+ 103   1              ADCLK = 0;
+ 104   1              ADDO = 1;
+ 105   1              dat <<= 8;
+ 106   1              dat |= ndat;
+ 107   1              return(dat);
+ 108   1      }
+ 109          void main(void)
+ 110          {
+ 111   1              while (1)
+ 112   1              {
+ 113   2                      unsigned int temp;
+ 114   2                      float press;
+ 115   2                      getdata = ADC0832(0);   //使用CH0 
+C51 COMPILER V9.60.0.0   1                                                                 06/25/2025 12:29:54 PAGE 3   
+
+ 116   2                      if (14 < getdata < 243)   //压力测量范围 
+ 117   2                      {
+ 118   3                              int vary = getdata;
+ 119   3                              /*压力传感器将压力转换为电压量，AD将这个电压值进行数模转换，但是电压值
+             -并不直接意味着压力的大小
+ 120   3                              例如5V并不意味着5kPa,因此还需要一步转换*/ 
+ 121   3                              press = ((10.0 / 23.0)*vary) + 9.3; //press即是电压 
+ 122   3                              temp = (int)(press * 10);
+ 123   3                              //显示buff，一共四位 
+ 124   3                              dispbuf[3] = temp / 1000;  //最高位 
+ 125   3                              dispbuf[2] = (temp % 1000) / 100;
+ 126   3                              dispbuf[1] = ((temp % 1000) % 100) / 10;
+ 127   3                              dispbuf[0] = ((temp % 1000) % 100) % 10;  //最低位 
+ 128   3                              display();
+ 129   3                      }
+ 130   2              }
+ 131   1      }
+ 132          
+ 133          /*
+ 134          输入  15--115kPA压力信号
+ 135                   输出  00h--ffh数字信号（adc0832）
+ 136                   在LCD上显示实际的压力值，如果超限则报警
+ 137          
+ 138          线性区间标度变换公式：    y=(115-15)/(243-13)*X+9.3kpa   
+ 139          */ 
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    438    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     26       9
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
